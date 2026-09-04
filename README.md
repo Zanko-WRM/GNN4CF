@@ -20,7 +20,11 @@ Across held-out events, GNN4CF reduces RMSE, relative L2 error, and false alarm 
 
 ## Supplementary Animations
 
-Supplementary animations are prepared to illustrate autoregressive rollout predictions for representative compound-flood events at 0.10 m and 0.20 m wet-depth thresholds. The single-boundary animations compare M1-M4 and the single-processor model, showing how successive architectural components affect the predicted spatial evolution, frame-wise error, inundation agreement, and relative L2 behavior. The multi-boundary animations focus on GNN4CF across simultaneous coastal-boundary combinations, including BC12, BC13, BC23, and BC123, to demonstrate model generalization to unseen compound boundary-forcing configurations. These animations are intended to be shared through an external review link during manuscript evaluation.
+Supplementary animations illustrating autoregressive rollout predictions for representative compound-flood events are available through the following Google Drive folder:
+
+[Reviewer supplementary animations](https://drive.google.com/drive/folders/1HcZCrWNIrm8h0ekQw5B9Z_MB6RL6o7XS?usp=sharing)
+
+The single-boundary animations compare M1-M4 and the single-processor model, showing how successive architectural components affect spatial flood evolution, frame-wise error, inundation agreement, and relative L2 behavior. The multi-boundary animations show GNN4CF across simultaneous coastal-boundary combinations, including BC12, BC13, BC23, and BC123, to illustrate generalization to unseen compound boundary-forcing configurations. Animations are provided for both 0.10 m and 0.20 m wet-depth thresholds.
 
 ## Citation
 
@@ -31,7 +35,7 @@ If you use this repository, code, figures, or concepts from GNN4CF in your resea
 ```bibtex
 @article{zandsalimi2026gnn4cf,
   title = {Boundary-Aware Graph Neural Networks for Compound Flood Forecasting},
-  author = {Zandsalimi, Zanko and Taghizadeh, Mehdi and and Shafiee-Jood, Majid and Alemazkoor, Negin},
+  author = {Zandsalimi, Zanko and Taghizadeh, Mehdi and Shafiee-Jood, Majid and Alemazkoor, Negin},
   journal = {Water Resources Research},
   year = {2026},
   note = {Under review}
@@ -40,4 +44,4 @@ If you use this repository, code, figures, or concepts from GNN4CF in your resea
 
 ## Repository Status
 
-This repository is being prepared for manuscript review. Additional code, model-configuration files, and reproducibility materials will be added as the submission package is finalized.
+This repository is being prepared for manuscript review. Code, model-configuration files, and reproducibility materials will be added upon publication.
