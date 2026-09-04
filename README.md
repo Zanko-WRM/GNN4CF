@@ -26,12 +26,12 @@ Supplementary animations are prepared to illustrate autoregressive rollout predi
 
 If you use this repository, code, figures, or concepts from GNN4CF in your research, please cite the manuscript:
 
-**Zandsalimi, Z.**, Taghizadeh, M., Lee Lynn, S., Goodall, J. L., Shafiee-Jood, M., and Alemazkoor, N. (2026). **Boundary-Aware Graph Neural Networks for Compound Flood Forecasting.** *Water Resources Research*. Under review.
+**Zandsalimi, Z.**, Taghizadeh, M., Shafiee-Jood, M., and Alemazkoor, N. (2026). **Boundary-Aware Graph Neural Networks for Compound Flood Forecasting.** *Water Resources Research*. Under review.
 
 ```bibtex
 @article{zandsalimi2026gnn4cf,
   title = {Boundary-Aware Graph Neural Networks for Compound Flood Forecasting},
-  author = {Zandsalimi, Zanko and Taghizadeh, Mehdi and Lee Lynn, S. and Goodall, Jonathan L. and Shafiee-Jood, Majid and Alemazkoor, Negin},
+  author = {Zandsalimi, Zanko and Taghizadeh, Mehdi and and Shafiee-Jood, Majid and Alemazkoor, Negin},
   journal = {Water Resources Research},
   year = {2026},
   note = {Under review}
