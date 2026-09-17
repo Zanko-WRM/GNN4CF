@@ -1,47 +1,88 @@
-# Boundary-Aware Graph Neural Networks for Compound Flood Forecasting
+# GNN4CF
 
-## Description
+GNN4CF is a boundary-aware graph neural network surrogate for autoregressive
+compound-flood forecasting under rainfall and coastal water-level forcing on
+an unstructured hydraulic mesh.
 
-Compound flooding arises from nonlinear interactions among rainfall-driven runoff, coastal water-level forcing, riverine response, and the hydraulic pathways that transfer these forcings through low-lying coastal floodplains. GNN4CF is a boundary-aware graph neural network surrogate designed to predict compound-flood water-depth evolution on unstructured hydraulic meshes while preserving the physical distinction between external boundary forcing and interior floodplain propagation.
+The model uses typed computational and coastal boundary ghost nodes, separate
+boundary-interior coupling and interior processors, physical and virtual
+boundary connections, boundary conditioning, rainfall conditioning, and
+autoregressive water-depth prediction.
 
-The framework represents the hydraulic mesh as a typed graph with separate coastal boundary and interior computational nodes. A dedicated boundary-interior coupling processor transfers coastal-stage information into the floodplain, while a separate interior processor propagates the hydraulic response through the computational domain. Virtual boundary-to-interior edges support long-range coastal signal transfer under finite message-passing depth, and repeated rainfall and coastal-stage conditioning preserves time-varying forcing information during autoregressive rollout.
+## Workflow
 
-Across held-out events, GNN4CF reduces RMSE, relative L2 error, and false alarm ratio while improving inundation-detection skill relative to ablated graph models. The model also achieves rapid GPU inference and generalizes from single-active-boundary training events to unseen simultaneous multi-boundary forcing configurations, indicating that learned boundary-response pathways can be recombined under more complex coastal-connectivity states. The proposed framework is summarized in the figure below.
-
-## Proposed Framework
-
-![Proposed GNN4CF framework](figures/GNN4CF_framework.png)
-
-## Highlights
-
-- GNN4CF enables rapid, spatially distributed compound-flood forecasting and generalizes to unseen multi-boundary forcing.
-- Dual processors outperform shared message passing by separating boundary exchange from interior propagation in boundary-driven PDE surrogates.
-- Dynamic forcing conditioning preserves time-varying inputs in autoregressive PDE surrogates, while virtual edges enhance long-range propagation.
-
-## Supplementary Animations
-
-Supplementary animations illustrating autoregressive rollout predictions for representative compound-flood events are available through the following Google Drive folder:
-
-[Reviewer supplementary animations](https://drive.google.com/drive/folders/1HcZCrWNIrm8h0ekQw5B9Z_MB6RL6o7XS?usp=sharing)
-
-The single-boundary animations compare M1-M4 and the single-processor model, showing how successive architectural components affect spatial flood evolution, frame-wise error, inundation agreement, and relative L2 behavior. The multi-boundary animations show GNN4CF across simultaneous coastal-boundary combinations, including BC12, BC13, BC23, and BC123, to illustrate generalization to unseen compound boundary-forcing configurations. Animations are provided for both 0.10 m and 0.20 m wet-depth thresholds.
-
-## Citation
-
-If you use this repository, code, figures, or concepts from GNN4CF in your research, please cite the manuscript:
-
-**Zandsalimi, Z.**, Taghizadeh, M., Shafiee-Jood, M., and Alemazkoor, N. (2026). **Boundary-Aware Graph Neural Networks for Compound Flood Forecasting.** *Water Resources Research*. Under review.
-
-```bibtex
-@article{zandsalimi2026gnn4cf,
-  title = {Boundary-Aware Graph Neural Networks for Compound Flood Forecasting},
-  author = {Zandsalimi, Zanko and Taghizadeh, Mehdi and Shafiee-Jood, Majid and Alemazkoor, Negin},
-  journal = {Water Resources Research},
-  year = {2026},
-  note = {Under review}
-}
+```text
+HEC-RAS simulations + DEM + scalar mesh attributes
+        |
+compute_terrain_features.py
+        |
+gnn4cf_hdf_graph_dataset.py
+        |
+train_gnn4cf.py
+        |
+prepare_gnn4cf_test_graphs.py
+        |
+run_gnn4cf_rollout_test.py
 ```
 
-## Repository Status
+| Script in `src/` | Role |
+| --- | --- |
+| `compute_terrain_features.py` | Computes GIS/terrain attributes sampled at computational cells. |
+| `gnn4cf_hdf_graph_dataset.py` | Converts event outputs into graph-ready HDF5 datasets; selects interior representatives and adds virtual boundary-interior edges. |
+| `train_gnn4cf.py` | Trains from grouped event splits with teacher-forced and pushforward stability branches. |
+| `prepare_gnn4cf_test_graphs.py` | Caches initial test graphs and future forcing sequences. |
+| `run_gnn4cf_rollout_test.py` | Loads a checkpoint and evaluates autoregressive test-event rollouts. |
+| `gnn4cf_graph_builder.py` | Assembles mesh connectivity, boundary nodes, features, normalization, and temporal snapshots. |
+| `gnn4cf_model.py` | Defines typed encoders, coupling/interior processors, conditioning, and the water-depth decoder. |
+| `gnn4cf_training_utils.py` | Provides losses, pushforward training, validation metrics, and rollout utilities. |
 
-This repository is being prepared for manuscript review. Code, model-configuration files, and reproducibility materials will be added upon publication.
+The graph builder and HDF dataset module are complementary libraries, not
+alternative dataset versions.
+
+## Configuration And Execution
+
+Update all placeholder paths in `configs/config_gnn4cf_final.yml`, the HEC-RAS
+area name, and the grouped event-split manifest before running. Supply existing
+event HDF files, a DEM in the mesh coordinate system, scalar cell attributes
+(`cell_id,zmin,zmax,relief`), and face geometry/connectivity attributes.
+Terrain extraction supplies the GIS table, not these scalar mesh tables.
+The manifest must contain the configured group and split columns.
+GIS feature selectors preserve source column order; keep it consistent when
+reusing normalization statistics and checkpoints.
+
+`config_name` organizes checkpoints, logs, rollout outputs, and optional W&B
+artifacts under `paths.runs_root`. It is not a model or scientific parameter.
+Use a distinct name per experiment and retain it when resuming the same run.
+
+Dependencies include PyTorch, PyTorch Geometric, NumPy, pandas, h5py, PyYAML,
+matplotlib, tqdm, rasterio, WhiteboxTools/`whitebox`, and
+`wandb` (imported by the trainer even when tracking is disabled).
+The training launcher currently requires POSIX signal handling (`SIGUSR1`).
+
+Run from the repository root:
+```bash
+python src/compute_terrain_features.py --config configs/config_gnn4cf_final.yml
+python src/gnn4cf_hdf_graph_dataset.py --config configs/config_gnn4cf_final.yml
+python src/train_gnn4cf.py --config configs/config_gnn4cf_final.yml
+python src/prepare_gnn4cf_test_graphs.py --config configs/config_gnn4cf_final.yml --no-interactive
+python src/run_gnn4cf_rollout_test.py --config configs/config_gnn4cf_final.yml
+```
+
+For multi-GPU training, launch the trainer through `torch.distributed.run`.
+HDF generation retains its post-generation feature inspector and representative
+coverage diagnostics. Rollout accepts `--checkpoint-path` for an explicit
+checkpoint and `--max-rollout-steps` for a short evaluation.
+
+The provided configuration uses relative-MSE and shallow-depth Smooth-L1
+(`lambda_shallow: 0.5`) inside both branches, with real/stability weights of 1.0.
+Flood-aware weighted regression and classification are disabled.
+The architecture is physically structured; training does not use a
+physics-informed loss. W&B tracking is disabled by default.
+
+## Manuscript
+
+Zandsalimi, Z., Taghizadeh, M., Shafiee-Jood, M., and Alemazkoor, N. (2026).
+*Boundary-Aware Graph Neural Networks for Compound Flood Forecasting.*
+Water Resources Research, under review.
+
+[Reviewer supplementary animations](https://drive.google.com/drive/folders/1HcZCrWNIrm8h0ekQw5B9Z_MB6RL6o7XS?usp=sharing)

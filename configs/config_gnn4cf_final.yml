@@ -1,0 +1,248 @@
+# GNN4CF manuscript configuration. Run commands from the repository root.
+# Replace filesystem placeholders with paths to your data and output directories.
+# This workflow consumes existing HEC-RAS events and terrain-statistics CSVs.
+
+# ============================================================
+# 1. STUDY AREA AND DIRECTORIES
+# ============================================================
+# Unique run identifier used to organize checkpoints, logs, rollout outputs,
+# and optional W&B artifacts. Use a distinct name for each experiment and
+# keep it unchanged when resuming that run.
+config_name: gnn4cf_example_run
+hecras:
+  area_name: Portsmouth
+  geometry_root: Geometry/2D Flow Areas
+  results_root: Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/2D Flow Areas
+paths:
+  # Directory containing copied HEC-RAS event HDF files for graph preprocessing.
+  copy_each_hdf_to: "<directory-for-copied-hecras-hdf-files>"
+  # Directory containing source HEC-RAS outputs; terrain extraction fallback.
+  results_dir: "<hecras-results-directory>"
+  # Cell-level mesh attributes: cell IDs, minimum/maximum elevation, and relief.
+  cell_attributes_csv: "<path-to-cell-attributes-csv>"
+  # Face-level mesh attributes with geometric and cell/ghost connectivity information.
+  face_attributes_csv: "<path-to-face-attributes-csv>"
+  # Root directory for generated graph-ready HDF datasets.
+  graphs_hdf_root: "<graph-hdf-dataset-directory>"
+  # Directory for terrain intermediate rasters and preprocessing outputs.
+  output_dir: "<model-output-directory>"
+  # Root directory for training runs, checkpoints, logs, and rollout results.
+  runs_root: "<training-runs-directory>"
+  # DEM raster used for terrain-feature extraction.
+  dem_path: "<path-to-dem-raster>"
+  external_node_features:
+    - join_on: cell_id
+      # Table of cell IDs and additional GIS/terrain attributes, written by terrain extraction.
+      path: "<path-to-cell-gis-attributes>"
+  save_every: 1
+# Graph subdirectories, normalization filename, checkpoints, and logs are
+# resolved by the workflow's directory defaults.
+
+# ============================================================
+# 2. TERRAIN / FEATURE EXTRACTION
+# ============================================================
+# compute_terrain_features.py reads hecras.area_name/geometry_root and paths
+# above. WhiteboxTools computes slope (degrees), aspect, mean curvature,
+# D8 direction, and accumulation (cells), sampled at computational cell points.
+# Terrain extraction uses the inputs and output path above.
+
+# ============================================================
+# 3. INPUT FEATURES AND FEATURE SELECTION
+# ============================================================
+# Order is checkpoint-sensitive. GIS selectors filter source column order.
+features:
+  static_node_features:
+    - node_coordinates
+    - area_cell
+    - manning_n
+    - infiltration
+    - terrain_stats
+    - external_gis_features
+  static_edge_features:
+    - geometry_stats
+    - relative_coordinates
+  dynamic_input_state_variables:
+    - wd
+  dynamic_input_drivers:
+    - rainfall_rate
+    - acc_rainfall
+    - sea_level
+    - sea_level_trend
+feature_selectors:
+  node:
+    terrain_stats:
+      include: [zmin, zmax, relief]
+    external_gis_features:
+      include: [slope, aspect, flow_direction, curvature, flow_accumulation]
+  edge:
+    geometry_stats:
+      include: [d_n]
+
+# ============================================================
+# 4. NORMALIZATION
+# ============================================================
+normalization:
+  enabled: true
+  default_methods:
+    static: minmax
+    dynamic: zscore
+  exclude_static_features: [x, y]
+  feature_methods:
+    static:
+      area_cell: log1p_zscore
+      manning_n: minmax
+      infiltration: log1p_zscore
+      zmin: zscore
+      zmax: zscore
+      relief: log1p_zscore
+      slope: log1p_zscore
+      aspect: minmax
+      flow_direction: minmax
+      curvature: zscore
+      flow_accumulation: log1p_zscore
+      d_n: minmax
+      dx: zscore
+      dy: zscore
+    dynamic:
+      wd: log1p_zscore
+      rainfall_rate: log1p_zscore
+      acc_rainfall: log1p_zscore
+      sea_level: zscore
+      sea_level_trend: no_norm
+      # Preserve the HDF auxiliary cell-volume tensors and their scaling.
+      cell_v: log1p_zscore
+
+# ============================================================
+# 5. GRAPH CONSTRUCTION
+# ============================================================
+representatives:
+  enabled: true
+  num_reps: 120
+  k_neighbors_per_bc: 3
+# Coverage hops are derived from model.interior.nmessage_passing_steps.
+
+# ============================================================
+# 6. TEMPORAL WINDOW AND PREDICTION
+# ============================================================
+window:
+  past_steps: 3
+  predictor_step: 1
+  future_steps: 1
+  warmup_enabled: true
+  warmup_steps: 12
+  label_vars: [wd]
+  # Retained for compatibility with existing HDF datasets and cached graphs.
+  aux_vars: [cell_v]
+
+# ============================================================
+# 7. GNN4CF MODEL ARCHITECTURE
+# ============================================================
+model:
+  latent_dim: 64
+  mlp_hidden_dim: 64
+  nmlp_layers: 3
+  # Shared fallback is also required by the rollout model constructor.
+  nmessage_passing_steps: 5
+  interior:
+    nmessage_passing_steps: 10
+  coupling:
+    enable_coupling: true
+    coupling_gate_mode: learned
+    nmessage_passing_steps: 5
+  boundary_skip: true
+  # null creates the learned boundary-preservation checkpoint parameter.
+  boundary_preserve_weight: null
+# Residual prediction uses the unchanged constructor default (true).
+
+# ============================================================
+# 8. DYNAMIC FORCING CONDITIONING
+# ============================================================
+boundary_conditioning:
+  enabled: true
+  mode: film
+  inject_every_processor_step: true
+  use_current_state: true
+  # Must stay false: enabling history would add checkpoint parameters.
+  use_history_state: false
+  use_geometry: true
+  geometry_interaction: multiply
+  current_encoder_hidden_dim: 64
+  geometry_encoder_hidden_dim: 64
+  film_hidden_dim: 128
+rainfall_conditioning:
+  enabled: true
+  mode: film
+  inject_before_interior: true
+  inject_every_interior_step: true
+  rainfall_features: [rainfall_rate, acc_rainfall]
+  current_encoder_hidden_dim: 64
+  film_hidden_dim: 64
+# Dynamic names are derived from state variables followed by drivers.
+
+# ============================================================
+# 9. DATASET / EVENT SELECTION
+# ============================================================
+event_selection:
+  enabled: true
+  mode: paired_bc_groups
+  bc_names: [BC1, BC2, BC3]
+  min_pair_index: 1
+  max_pair_index: 500
+  require_complete_group: true
+  require_matching_s_r: true
+
+# ============================================================
+# 10. TRAINING AND GROUPED SPLIT
+# ============================================================
+training:
+  grouped_event_split:
+    enabled: true
+    mode: manifest
+    # CSV manifest defining the grouped train/validation/test event split.
+    split_manifest_path: "<path-to-grouped-event-split-manifest>"
+    group_key_column: group_key
+    split_column: proposed_split_220_40_40
+  epochs: 300
+  batch_size: 32
+  learning_rate: 0.0002
+  weight_decay: 0
+  seed: 42
+  use_cached_train_val: true
+  # Adam optimizer; plateau scheduler steps on validation loss.
+  scheduler_type: ReduceLROnPlateau
+  scheduler_params:
+    mode: min
+    factor: 0.5
+    patience: 20
+    min_lr: 1e-6
+
+# ============================================================
+# 11. LOSS FUNCTION
+# ============================================================
+# Manuscript objective: weight_real * (main_real + lambda_shallow * shallow_real)
+#                     + weight_stability * (main_stability + lambda_shallow * shallow_stability).
+# Both branches supervise water depth on computational nodes.
+loss:
+  loss_type: relative_mse
+  weight_wd: 1.0
+  # Threshold is also used for flood/wet-cell metrics with this loss disabled.
+  flood_aware:
+    enabled: false
+    threshold_real: 0.03
+  loss_weights:
+    real: 1.0
+    stability: 1.0
+  shallow_depth_loss:
+    enabled: true
+    loss_type: smooth_l1
+    lambda_shallow: 0.5
+    min_depth_m: 0.03
+    max_depth_m: 0.5
+    huber_beta_m: 0.1
+
+# ============================================================
+# 12. LOGGING / OPTIONAL OUTPUT
+# ============================================================
+wandb:
+  enabled: false
+# To opt into W&B, also supply wandb.project and optional wandb.entity/tags.
