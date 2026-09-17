@@ -9,6 +9,8 @@ boundary-interior coupling and interior processors, physical and virtual
 boundary connections, boundary conditioning, rainfall conditioning, and
 autoregressive water-depth prediction.
 
+![GNN4CF framework](figures/GNN4CF_framework.png)
+
 ## Workflow
 
 ```text
@@ -67,17 +69,6 @@ python src/train_gnn4cf.py --config configs/config_gnn4cf_final.yml
 python src/prepare_gnn4cf_test_graphs.py --config configs/config_gnn4cf_final.yml --no-interactive
 python src/run_gnn4cf_rollout_test.py --config configs/config_gnn4cf_final.yml
 ```
-
-For multi-GPU training, launch the trainer through `torch.distributed.run`.
-HDF generation retains its post-generation feature inspector and representative
-coverage diagnostics. Rollout accepts `--checkpoint-path` for an explicit
-checkpoint and `--max-rollout-steps` for a short evaluation.
-
-The provided configuration uses relative-MSE and shallow-depth Smooth-L1
-(`lambda_shallow: 0.5`) inside both branches, with real/stability weights of 1.0.
-Flood-aware weighted regression and classification are disabled.
-The architecture is physically structured; training does not use a
-physics-informed loss. W&B tracking is disabled by default.
 
 ## Manuscript
 
