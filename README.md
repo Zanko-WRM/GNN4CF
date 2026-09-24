@@ -9,7 +9,7 @@ boundary-interior coupling and interior processors, physical and virtual
 boundary connections, boundary conditioning, rainfall conditioning, and
 autoregressive water-depth prediction.
 
-![GNN4CF framework](figures/GNN4CF_framework.png)
+![GNN4CF framework](figure/GNN4CF_framework_final.png)
 
 ## Workflow
 
